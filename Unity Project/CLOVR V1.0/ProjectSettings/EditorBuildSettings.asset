@@ -1,0 +1,15 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Overlays Example.unity
+    guid: bcb19c651de338242b8de5de791fb33b
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: f4799771eb10bb4499441e158047fe12,
+      type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 4e7f4557b9c19a24eaee0922b113fc7a,
+      type: 2}

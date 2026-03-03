@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Questionnaire xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <title>Please take some time for this questionnaire.</title>
+  <questionnaireName>Revised Game Engagement Questionnaire</questionnaireName>
+  <questions>
+    <string>I felt content.</string>
+    <string>I felt happy.</string>
+    <string>It felt good.</string>
+    <string>I thought it was fun.</string>
+    <string>I enjoyed it.</string>
+    <string>It gave me a bad mood.</string>
+    <string>I felt annoyed.</string>
+    <string>I felt frustrated.</string>
+    <string>I felt irritable.</string>
+    <string>I felt pressured.</string>
+    <string>I felt time pressure.</string>
+    <string>I had to put a lot of effort into it.</string>
+    <string>I felt skilful.</string>
+    <string>I was good at it.</string>
+    <string>I felt competent.</string>
+    <string>I was fast at reaching the game's targets.</string>
+    <string>I was fully occupied with the game.</string>
+    <string>I lost track of time.</string>
+    <string>I forgot about everything around me.</string>
+    <string>I was deeply concentrated in the game.</string>
+    <string>I lost connection with the outside world.</string>
+    <string>I was interested in the game's story.</string>
+    <string>I felt imaginative.</string>
+    <string>I felt that I could explore things.</string>
+    <string>It felt like a rich experience.</string>
+  </questions>
+  <subquestions>
+    <string></string>
+  </subquestions>
+  <answers>
+    <string>0</string>
+    <string>1</string>
+    <string>2</string>
+    <string>3</string>
+    <string>4</string>
+  </answers>
+  <labels>
+    <string>Not At All</string>
+    <string>Slightly</string>
+    <string>Moderately</string>
+    <string>Fairly</string>
+    <string>Extremely</string>
+  </labels>
+</Questionnaire>

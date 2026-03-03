@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Questionnaire xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <title>Please take some time for this questionnaire.</title>
+  <questionnaireName>Fidelity-based Presence Scale</questionnaireName>
+  <questions>
+    <string>My sense of being in the virtual world was like being in a real place.</string>
+    <string>During the experience I felt the virtual world was reality for me.</string>
+    <string>I felt like I was actually there in the virtual world.</string>
+    <string>I felt present in the virtual world.</string>
+    <string>I felt I could control my actions within the virtual world.</string>
+    <string>I felt the virtual world was responsive to my actions.</string>
+    <string>I felt I could move or manipulate objects easily in the virtual world.</string>
+    <string>I felt involved in the virtual world experience.</string>
+    <string>I could concentrate on the virtual activities rather than the controls to perform them.</string>
+    <string>When something happened to my virtual body I felt it happened to my real body.</string>
+  </questions>
+  <subquestions>
+    <string> </string>
+  </subquestions>
+  <answers>
+    <string>1</string>
+    <string>2</string>
+    <string>3</string>
+    <string>4</string>
+    <string>5</string>
+    <string>6</string>
+    <string>7</string>
+  </answers>
+  <labels>
+    <string>Fully disagree</string>
+    <string> </string>
+    <string> </string>
+    <string> </string>
+    <string> </string>
+    <string> </string>
+    <string>Fully agree</string>
+  </labels>
+</Questionnaire>
