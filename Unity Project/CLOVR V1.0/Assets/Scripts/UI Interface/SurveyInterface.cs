@@ -899,13 +899,17 @@ namespace XRT_OVR_Grabber
                 return;
             }*/
 
+            // Capture the timestamp when this response is recorded (time first, then date)
+            // prefix with apostrophe so Excel doesn't auto-convert it
+            string responseTimestamp = "'" + DateTime.UtcNow.ToString("HH:mm:ss.fff yyyy-MM-dd");
+
             if (questionIndex == 0)
             {
-                tempStoredResponses += input;
+                tempStoredResponses += input + "," + responseTimestamp;
             }
             else
             {
-                tempStoredResponses += "," + input;
+                tempStoredResponses += "," + input + "," + responseTimestamp;
             }
             questionIndex++;
 
@@ -921,11 +925,14 @@ namespace XRT_OVR_Grabber
 
         /// <summary>
         /// Saves all responses from 'tempStoredResponses' to 'storedQuestionnaires' and then clears up the temp storage
+        /// Note: Individual response timestamps are now embedded in the response string itself
         /// <summary> 
         public void SaveCompletedQuestionnaire()
         {
             storedQuestionnaires.Add(tempStoredResponses);
-            timeStamps.Add(DateTime.UtcNow.ToString("yyyy-MM-dd-HH-mm-ss-fff"));
+            // Note: timeStamps is kept for backwards compatibility but is no longer used for CSV exports
+            // stored for compatibility; prefix with apostrophe to remain text
+            timeStamps.Add("'" + DateTime.UtcNow.ToString("HH:mm:ss.fff yyyy-MM-dd"));
             questionIndex = 0; 
         }
 
@@ -933,6 +940,7 @@ namespace XRT_OVR_Grabber
         /// Save the current (possibly partial) responses by padding unanswered questions with empty entries,
         /// then finalize this questionnaire run (store and reset temp responses).
         /// Does NOT invoke QuestionnaireFinished event — caller can decide whether to trigger end-of-questionnaire behavior.
+        /// Note: Each question now has both a response and a timestamp, so we pad with empty pairs.
         /// </summary>
         public void SaveIncompleteResponsesAndFinalize()
         {
@@ -941,8 +949,9 @@ namespace XRT_OVR_Grabber
                 parts = new List<string>(tempStoredResponses.Split(','));
 
             int totalQuestions = (questions != null) ? questions.Count : 0;
-            while (parts.Count < totalQuestions)
-                parts.Add("");
+            int expectedPartsCount = totalQuestions * 2; // Each question has response and timestamp
+            while (parts.Count < expectedPartsCount)
+                parts.Add(""); // Pad with empty strings for missing responses and timestamps
 
             tempStoredResponses = string.Join(",", parts);
             // reuse existing saving machinery
@@ -950,7 +959,8 @@ namespace XRT_OVR_Grabber
         }
 
         /// <summary>
-        /// Creates and returns a string of all the questions in a comma separated format. 
+        /// Creates and returns a string of all the questions in a comma separated format with timestamp columns.
+        /// Format: Question1,Question1_Timestamp,Question2,Question2_Timestamp,...
         /// <summary> 
         public string GetQuestionnaireHeader()
         {
@@ -961,15 +971,15 @@ namespace XRT_OVR_Grabber
                 if (first)
                 {
                     first = false;
-                    outString += s;
+                    outString += s + "," + s + "_Timestamp";
                 }
                 else
                 {
-                    outString += "," + s;
+                    outString += "," + s + "," + s + "_Timestamp";
                 }
             }
 
-            return outString + ",timestamp" + "\n";
+            return outString + "\n";
         }
 
         /////////////////////////////////////////////////////////////////// These are printers for instances in the questionnaire. 
@@ -1068,35 +1078,16 @@ namespace XRT_OVR_Grabber
         }
 
         /// <summary>
-        /// returns all stored responses in a formatted string
+        /// returns all stored responses in a formatted string with embedded timestamps
+        /// Format: Answer1,Timestamp1,Answer2,Timestamp2,...
         /// <summary> 
         public string GetStringVer()
         {
             string varOut = "";
-            //Each column is a question and each row is a trial. 
-            /*foreach(List<string> arr in storedQuestionnaires)
-            {
-                string tempVar = "";
-                bool first = true;
-                foreach (string s in arr)
-                {
-                    if (first)
-                    {
-                        tempVar += s;
-                        first = false;
-                    }
-                    else
-                    {
-                        tempVar += "," + s;
-                    }
-                }
-                varOut += tempVar + "\n";
-            }*/
-            int counter = 0;
+            //Each column is a question with its timestamp, and each row is a trial.
             foreach(string s in storedQuestionnaires)
             {
-                varOut += s +"," + timeStamps[counter] + "\n";
-                counter++; 
+                varOut += s + "\n";
             }
 
             return varOut;
