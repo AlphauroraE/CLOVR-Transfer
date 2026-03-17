@@ -54,6 +54,7 @@ namespace XRT_OVR_Grabber
         public Text titleTextbox;                   /// <summary>  Used for the title - description of the questionnaire on the first screen of the questionnaire.<summary>
         public Text questionnaireNameTextbox;       ///<summary>  This is the text component of the question.<summary>
         public Text finishScreenTextbox;            /// <summary> This is the text component of the finishing portion <summary> 
+        public Button finishScreenCloseButton;      /// <summary> The close button on the finished screen <summary>
         public UISubcategory questionnaireBox;      /// <summary> This controls how many questions are displayed to the participant through the questionnaire screen. <summary>
         string folderLocationForSurveys = "";       /// <summary> This is the location where the surveys are located. The user can specify any location on their computer. <summary>
         int currentlyActiveQuestionnaire = 0;       /// <summary> Sets which questionnaire is being used. 
@@ -243,6 +244,8 @@ namespace XRT_OVR_Grabber
             titleScreenPrefab.SetActive(false);
             questionScreenPrefab.SetActive(true);
             Debug.Log("[SurveyInterface] UI_StartQuestionnaire changed states: titleActive(after)=" + (titleScreenPrefab!=null ? titleScreenPrefab.activeSelf.ToString() : "null") + ", questionActive(after)=" + (questionScreenPrefab!=null ? questionScreenPrefab.activeSelf.ToString() : "null"));
+            // Set the start time for the current questionnaire
+            assignedQuestionnaires[currentlyActiveQuestionnaire].questionnaireStartTime = DateTime.Now;
             UpdateQuestionnaireQuestion();
 
         }
@@ -255,6 +258,11 @@ namespace XRT_OVR_Grabber
             questionnaireBox.ClearButtons(); 
             questionScreenPrefab.SetActive(false);
             finishedScreenPrefab.SetActive(true);
+            if (finishScreenCloseButton != null)
+            {
+                finishScreenCloseButton.interactable = true;
+                finishScreenCloseButton.gameObject.SetActive(true);
+            }
         }
 
         /// <summary>
@@ -454,6 +462,11 @@ namespace XRT_OVR_Grabber
 
                         // Show the finished/outro screen immediately
                         UI_MoveToCompletedScreen();
+                        if (finishScreenCloseButton != null)
+                        {
+                            finishScreenCloseButton.interactable = false;
+                            finishScreenCloseButton.gameObject.SetActive(false);
+                        }
                     }
                     catch (System.Exception e)
                     {
@@ -836,6 +849,8 @@ namespace XRT_OVR_Grabber
         List<string> storedQuestionnaires = new List<string>();
         string tempStoredResponses = ""; 
 
+        // Track when the questionnaire started for elapsed time calculations
+        public DateTime questionnaireStartTime;
 
         int questionIndex    = 0;
         int subCategoryIndex = 0;
@@ -899,17 +914,23 @@ namespace XRT_OVR_Grabber
                 return;
             }*/
 
-            // Capture the timestamp when this response is recorded (time first, then date)
-            // prefix with apostrophe so Excel doesn't auto-convert it
-            string responseTimestamp = "'" + DateTime.UtcNow.ToString("HH:mm:ss.fff yyyy-MM-dd");
+            // Set start time on first response - MOVED TO UI_StartQuestionnaire
+            // if (questionIndex == 0)
+            // {
+            //     questionnaireStartTime = DateTime.UtcNow;
+            // }
+
+            // Calculate elapsed milliseconds from questionnaire start
+            long elapsedMs = (long)(DateTime.Now - questionnaireStartTime).TotalMilliseconds;
+            string elapsedTimestamp = elapsedMs.ToString();
 
             if (questionIndex == 0)
             {
-                tempStoredResponses += input + "," + responseTimestamp;
+                tempStoredResponses += input + "," + elapsedTimestamp;
             }
             else
             {
-                tempStoredResponses += "," + input + "," + responseTimestamp;
+                tempStoredResponses += "," + input + "," + elapsedTimestamp;
             }
             questionIndex++;
 
@@ -929,10 +950,11 @@ namespace XRT_OVR_Grabber
         /// <summary> 
         public void SaveCompletedQuestionnaire()
         {
-            storedQuestionnaires.Add(tempStoredResponses);
+            // Append the questionnaire start time to the responses
+            string startTimeString = questionnaireStartTime.ToString("HH:mm:ss.fff yyyy-MM-dd");
+            storedQuestionnaires.Add(tempStoredResponses + "," + startTimeString);
             // Note: timeStamps is kept for backwards compatibility but is no longer used for CSV exports
-            // stored for compatibility; prefix with apostrophe to remain text
-            timeStamps.Add("'" + DateTime.UtcNow.ToString("HH:mm:ss.fff yyyy-MM-dd"));
+            timeStamps.Add(questionnaireStartTime.ToString("HH:mm:ss.fff yyyy-MM-dd"));
             questionIndex = 0; 
         }
 
@@ -940,7 +962,7 @@ namespace XRT_OVR_Grabber
         /// Save the current (possibly partial) responses by padding unanswered questions with empty entries,
         /// then finalize this questionnaire run (store and reset temp responses).
         /// Does NOT invoke QuestionnaireFinished event — caller can decide whether to trigger end-of-questionnaire behavior.
-        /// Note: Each question now has both a response and a timestamp, so we pad with empty pairs.
+        /// Note: Each question now has both a response and an elapsed ms timestamp, so we pad with empty pairs.
         /// </summary>
         public void SaveIncompleteResponsesAndFinalize()
         {
@@ -949,18 +971,19 @@ namespace XRT_OVR_Grabber
                 parts = new List<string>(tempStoredResponses.Split(','));
 
             int totalQuestions = (questions != null) ? questions.Count : 0;
-            int expectedPartsCount = totalQuestions * 2; // Each question has response and timestamp
+            int expectedPartsCount = totalQuestions * 2; // Each question has response and elapsed ms
             while (parts.Count < expectedPartsCount)
                 parts.Add(""); // Pad with empty strings for missing responses and timestamps
 
             tempStoredResponses = string.Join(",", parts);
+            // Note: Start time will be appended by SaveCompletedQuestionnaire
             // reuse existing saving machinery
             SaveCompletedQuestionnaire();
         }
 
         /// <summary>
-        /// Creates and returns a string of all the questions in a comma separated format with timestamp columns.
-        /// Format: Question1,Question1_Timestamp,Question2,Question2_Timestamp,...
+        /// Creates and returns a string of all the questions in a comma separated format with elapsed time columns.
+        /// Format: Question1,Question1_ElapsedMs,Question2,Question2_ElapsedMs,...,QuestionnaireStartTime
         /// <summary> 
         public string GetQuestionnaireHeader()
         {
@@ -971,15 +994,15 @@ namespace XRT_OVR_Grabber
                 if (first)
                 {
                     first = false;
-                    outString += s + "," + s + "_Timestamp";
+                    outString += s + "," + s + "_ElapsedMs";
                 }
                 else
                 {
-                    outString += "," + s + "," + s + "_Timestamp";
+                    outString += "," + s + "," + s + "_ElapsedMs";
                 }
             }
 
-            return outString + "\n";
+            return outString + ",QuestionnaireStartTime\n";
         }
 
         /////////////////////////////////////////////////////////////////// These are printers for instances in the questionnaire. 
@@ -1078,13 +1101,13 @@ namespace XRT_OVR_Grabber
         }
 
         /// <summary>
-        /// returns all stored responses in a formatted string with embedded timestamps
-        /// Format: Answer1,Timestamp1,Answer2,Timestamp2,...
+        /// returns all stored responses in a formatted string with embedded elapsed times and start time
+        /// Format: Answer1,ElapsedMs1,Answer2,ElapsedMs2,...,QuestionnaireStartTime
         /// <summary> 
         public string GetStringVer()
         {
             string varOut = "";
-            //Each column is a question with its timestamp, and each row is a trial.
+            //Each column is a question with its elapsed time, and each row is a trial with start time at end.
             foreach(string s in storedQuestionnaires)
             {
                 varOut += s + "\n";
