@@ -7160,6 +7160,7 @@ MonoBehaviour:
   titleTextbox: {fileID: 2315828592197907282}
   questionnaireNameTextbox: {fileID: 3235215218296205229}
   finishScreenTextbox: {fileID: 6312004145345981765}
+  finishScreenCloseButton: {fileID: 4503411071499873633}
   questionnaireBox: {fileID: 9144067449323858843}
   LoggerManager: {fileID: 579297725}
   questionnairesAsString: []
@@ -8525,7 +8526,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 543979739}
   m_CullTransparentMesh: 1
---- !u!84 &574578390
+--- !u!84 &561365632
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -24296,7 +24297,7 @@ Camera:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingPath: -1
-  m_TargetTexture: {fileID: 574578390}
+  m_TargetTexture: {fileID: 561365632}
   m_TargetDisplay: 0
   m_TargetEye: 3
   m_HDR: 1

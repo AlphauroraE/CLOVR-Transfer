@@ -13,5 +13,5 @@
   <microphoneDurationSecs>60</microphoneDurationSecs>
   <microphoneIndex>0</microphoneIndex>
   <bufferSize>3000</bufferSize>
-  <trialCount>142</trialCount>
+  <trialCount>152</trialCount>
 </ProjectSettings>
