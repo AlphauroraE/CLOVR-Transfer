@@ -50,6 +50,8 @@ namespace XRT_OVR_Grabber
         [Header("Severe-response handling")]
         [Tooltip("Optional override message shown on the Outro when a participant selects a 'Severe' response.")]
         public string severePopupMessage = "You are no longer eligible for this study, please notify the study runner";
+        public SevereResponsePopup severeResponsePopup;
+
         public GameObject finishedScreenPrefab;     /// <summary> This is the gameobject of the last screen of the questionnaires     <summary>
         public Text titleTextbox;                   /// <summary>  Used for the title - description of the questionnaire on the first screen of the questionnaire.<summary>
         public Text questionnaireNameTextbox;       ///<summary>  This is the text component of the question.<summary>
@@ -59,7 +61,11 @@ namespace XRT_OVR_Grabber
         string folderLocationForSurveys = "";       /// <summary> This is the location where the surveys are located. The user can specify any location on their computer. <summary>
         int currentlyActiveQuestionnaire = 0;       /// <summary> Sets which questionnaire is being used. 
 
-       
+        bool severeResponsePending = false;
+        string pendingSevereValue = null;
+
+        public Questionnaire.QuestionnaireCheckpoint severeCheckpoint;
+
         public LoggingManagerAPI LoggerManager;    
         XML_Reader XMLReader = new XML_Reader();
         List<Questionnaire> assignedQuestionnaires = new List<Questionnaire>();
@@ -359,131 +365,165 @@ namespace XRT_OVR_Grabber
                 ghostingLock = true;
             }
 
-            //string inValue = "";
-            // Save the response first
-            assignedQuestionnaires[currentlyActiveQuestionnaire].SaveResponse(value);
+            if (severeResponsePending)
+            {
+                Debug.Log("[SurveyInterface] Severe disqualification is pending; ignoring additional response until runner action.");
+                return;
+            }
 
-            // Detect SSQ severe response (value may be like "3 (Severe)" or just "3").
+            string qName = assignedQuestionnaires[currentlyActiveQuestionnaire].questionnaireName ?? "";
+            bool isSSQ = qName.ToLower().Contains("ssq") || qName.ToLower().Contains("simulator");
+
+            // Normalize the response token
+            string token = value != null ? value.Trim() : "";
+            string firstToken = token == "" ? "" : token.Split(' ')[0].Trim();
+
+            bool severeSelected = false;
+            var q = assignedQuestionnaires[currentlyActiveQuestionnaire];
             try
             {
-                string qName = assignedQuestionnaires[currentlyActiveQuestionnaire].questionnaireName ?? "";
-                bool isSSQ = qName.ToLower().Contains("ssq") || qName.ToLower().Contains("simulator");
-
-                // Normalize the response token
-                string token = value != null ? value.Trim() : "";
-                string firstToken = token == "" ? "" : token.Split(' ')[0].Trim();
-
-                bool severeSelected = false;
-                var q = assignedQuestionnaires[currentlyActiveQuestionnaire];
-                try
+                // 1) If labels are present, check whether the selected answer maps to a label containing "severe".
+                if (q.labels != null && q.labels.Count > 0)
                 {
-                    // 1) If labels are present, check whether the selected answer maps to a label containing "severe".
-                    if (q.labels != null && q.labels.Count > 0)
+                    int selIndex = -1;
+                    if (q.answers != null)
                     {
-                        // Try to find selected index by matching answer token to answers list
-                        int selIndex = -1;
-                        if (q.answers != null)
+                        for (int i = 0; i < q.answers.Count; i++)
                         {
-                            for (int i = 0; i < q.answers.Count; i++)
+                            if (q.answers[i] != null && q.answers[i].Trim() == firstToken)
                             {
-                                if (q.answers[i] != null && q.answers[i].Trim() == firstToken)
-                                {
-                                    selIndex = i;
-                                    break;
-                                }
+                                selIndex = i;
+                                break;
                             }
-                        }
-
-                        // If not found by answer value, maybe the button sent the label text directly
-                        if (selIndex == -1)
-                        {
-                            for (int i = 0; i < q.labels.Count; i++)
-                            {
-                                if (q.labels[i] != null && q.labels[i].Trim().ToLower().Contains(firstToken.ToLower()))
-                                {
-                                    selIndex = i;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (selIndex >= 0 && selIndex < q.labels.Count)
-                        {
-                            if (q.labels[selIndex] != null && q.labels[selIndex].ToLower().Contains("severe"))
-                                severeSelected = true;
                         }
                     }
 
-                    // 2) Fallback: if answers are numeric, treat the maximal answer as severe and compare numerically
-                    if (!severeSelected && q.answers != null && q.answers.Count > 0)
+                    if (selIndex == -1)
                     {
-                        int selNum;
-                        int maxNum = int.MinValue;
-                        bool selParsed = int.TryParse(firstToken, out selNum);
-                        for (int i = 0; i < q.answers.Count; i++)
+                        for (int i = 0; i < q.labels.Count; i++)
                         {
-                            int v;
-                            if (int.TryParse(q.answers[i], out v))
+                            if (q.labels[i] != null && q.labels[i].Trim().ToLower().Contains(firstToken.ToLower()))
                             {
-                                if (v > maxNum) maxNum = v;
+                                selIndex = i;
+                                break;
                             }
                         }
-                        if (selParsed && selNum == maxNum && maxNum != int.MinValue)
+                    }
+
+                    if (selIndex >= 0 && selIndex < q.labels.Count)
+                    {
+                        if (q.labels[selIndex] != null && q.labels[selIndex].ToLower().Contains("severe"))
                             severeSelected = true;
                     }
                 }
-                catch (Exception) { /* ignore and let other heuristics decide */ }
 
-                if (isSSQ && severeSelected)
+                // 2) Fallback: if answers are numeric, treat the maximal answer as severe and compare numerically
+                if (!severeSelected && q.answers != null && q.answers.Count > 0)
                 {
-                    Debug.Log("[SurveyInterface] SSQ severe response detected. Stopping questionnaire and showing Outro with disqualification message.");
-
-                    // Save partial responses (pad unanswered questions with blanks) and finalize this questionnaire run
-                    try
+                    int selNum;
+                    int maxNum = int.MinValue;
+                    bool selParsed = int.TryParse(firstToken, out selNum);
+                    for (int i = 0; i < q.answers.Count; i++)
                     {
-                        var qObj = assignedQuestionnaires[currentlyActiveQuestionnaire];
-                        if (qObj != null)
+                        int v;
+                        if (int.TryParse(q.answers[i], out v))
                         {
-                            qObj.SaveIncompleteResponsesAndFinalize();
+                            if (v > maxNum) maxNum = v;
                         }
                     }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogError("[SurveyInterface] Error while saving incomplete questionnaire after severe response: " + e.Message);
-                    }
-
-                    // Prefer using the Outro/finished screen to show the message.
-                    try
-                    {
-                        if (finishScreenTextbox != null)
-                        {
-                            finishScreenTextbox.text = string.IsNullOrEmpty(severePopupMessage) ? "You are no longer eligible for this study, please notify the study runner" : severePopupMessage;
-                        }
-
-                        // Show the finished/outro screen immediately
-                        UI_MoveToCompletedScreen();
-                        if (finishScreenCloseButton != null)
-                        {
-                            finishScreenCloseButton.interactable = false;
-                            finishScreenCloseButton.gameObject.SetActive(false);
-                        }
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogError("[SurveyInterface] Error while showing Outro for severe response: " + e.Message);
-                    }
-
-                    // Don't progress to the next question
-                    return;
+                    if (selParsed && selNum == maxNum && maxNum != int.MinValue)
+                        severeSelected = true;
                 }
             }
-            catch (System.Exception e)
+            catch (Exception) { /* ignore and let other heuristics decide */ }
+
+            if (isSSQ && severeSelected)
             {
-                Debug.LogError("[SurveyInterface] Error while evaluating severe-response logic: " + e.Message);
+                Debug.Log("[SurveyInterface] SSQ severe response detected. Awaiting runner callback before finalizing.");
+
+                severeResponsePending = true;
+                pendingSevereValue = value;
+                severeCheckpoint = assignedQuestionnaires[currentlyActiveQuestionnaire].CreateCheckpoint();
+
+                if (severeResponsePopup != null)
+                {
+                    severeResponsePopup.Show();
+                }
+
+                if (finishScreenTextbox != null)
+                {
+                    finishScreenTextbox.text = string.IsNullOrEmpty(severePopupMessage) ? "You are no longer eligible for this study, please notify the study runner" : severePopupMessage;
+                }
+
+                UI_MoveToCompletedScreen();
+                if (finishScreenCloseButton != null)
+                {
+                    finishScreenCloseButton.interactable = false;
+                    finishScreenCloseButton.gameObject.SetActive(false);
+                }
+
+                return;
             }
 
-            // Normal flow: update to next question
+            // Normal flow: save and update to next question
+            assignedQuestionnaires[currentlyActiveQuestionnaire].SaveResponse(value);
             UpdateQuestionnaireQuestion();
+        }
+
+        public void OnSevereResponseUndo()
+        {
+            if (!severeResponsePending)
+                return;
+
+            severeResponsePending = false;
+            pendingSevereValue = null;
+
+            assignedQuestionnaires[currentlyActiveQuestionnaire].RestoreCheckpoint(severeCheckpoint);
+
+            if (finishedScreenPrefab != null)
+                finishedScreenPrefab.SetActive(false);
+            if (questionScreenPrefab != null)
+                questionScreenPrefab.SetActive(true);
+
+            UpdateQuestionnaireQuestion();
+
+            if (severeResponsePopup != null)
+                severeResponsePopup.Hide();
+        }
+
+        public void OnSevereResponseConfirm()
+        {
+            if (!severeResponsePending)
+                return;
+
+            severeResponsePending = false;
+
+            var qObj = assignedQuestionnaires[currentlyActiveQuestionnaire];
+            if (qObj != null && pendingSevereValue != null)
+            {
+                qObj.SaveResponseWithoutFinalizing(pendingSevereValue);
+
+                // If question has now reached end-of-questions, SaveResponseWithoutFinalizing keeps it in progress
+                // Save incomplete questionnaire now
+                qObj.SaveIncompleteResponsesAndFinalize();
+
+                pendingSevereValue = null;
+            }
+
+            if (finishScreenTextbox != null)
+            {
+                finishScreenTextbox.text = string.IsNullOrEmpty(severePopupMessage) ? "You are no longer eligible for this study, please notify the study runner" : severePopupMessage;
+            }
+
+            UI_MoveToCompletedScreen();
+            if (finishScreenCloseButton != null)
+            {
+                finishScreenCloseButton.interactable = false;
+                finishScreenCloseButton.gameObject.SetActive(false);
+            }
+
+            if (severeResponsePopup != null)
+                severeResponsePopup.Hide();
         }
 
 
@@ -698,6 +738,13 @@ namespace XRT_OVR_Grabber
             saveAllQuestionnaireResults += _SaveAllReponsesAndExport;
             finishTheQuestionnaire += UI_MoveToCompletedScreen;
             _autoAdvanceAction += AutoAdvanceAfterFinish;
+
+            if (severeResponsePopup != null)
+            {
+                severeResponsePopup.OnUndo += OnSevereResponseUndo;
+                severeResponsePopup.OnConfirm += OnSevereResponseConfirm;
+            }
+
             //_Init();
             //DebugQuestionnaire();
         }
@@ -760,6 +807,12 @@ namespace XRT_OVR_Grabber
             QuestionnaireEvents.QuestionnaireSaveAll.RemoveListener(saveAllQuestionnaireResults);
             QuestionnaireEvents.QuestionnaireFinished.RemoveListener(finishTheQuestionnaire);
             QuestionnaireEvents.QuestionnaireFinished.RemoveListener(_autoAdvanceAction);
+
+            if (severeResponsePopup != null)
+            {
+                severeResponsePopup.OnUndo -= OnSevereResponseUndo;
+                severeResponsePopup.OnConfirm -= OnSevereResponseConfirm;
+            }
         
         }
 
@@ -855,6 +908,46 @@ namespace XRT_OVR_Grabber
         int questionIndex    = 0;
         int subCategoryIndex = 0;
         string subcategoryResponses; 
+
+        public struct QuestionnaireCheckpoint
+        {
+            public int questionIndex;
+            public string tempStoredResponses;
+            public DateTime questionnaireStartTime;
+        }
+
+        public QuestionnaireCheckpoint CreateCheckpoint()
+        {
+            return new QuestionnaireCheckpoint
+            {
+                questionIndex = questionIndex,
+                tempStoredResponses = tempStoredResponses,
+                questionnaireStartTime = questionnaireStartTime
+            };
+        }
+
+        public void RestoreCheckpoint(QuestionnaireCheckpoint checkpoint)
+        {
+            questionIndex = checkpoint.questionIndex;
+            tempStoredResponses = checkpoint.tempStoredResponses;
+            questionnaireStartTime = checkpoint.questionnaireStartTime;
+        }
+
+        public void SaveResponseWithoutFinalizing(string input)
+        {
+            long elapsedMs = (long)(DateTime.Now - questionnaireStartTime).TotalMilliseconds;
+            string elapsedTimestamp = elapsedMs.ToString();
+
+            if (questionIndex == 0)
+            {
+                tempStoredResponses += input + "," + elapsedTimestamp;
+            }
+            else
+            {
+                tempStoredResponses += "," + input + "," + elapsedTimestamp;
+            }
+            questionIndex++;
+        }
 
     /// <summary> Default Constructor<summary> 
     public Questionnaire(){ timeStamps = new List<string>(); }
